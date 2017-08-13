@@ -19,6 +19,9 @@ def readSerial():
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
 		connections = set()
 
+		def check_origin(self, origin):
+			return True
+
 		def open(self):
 				self.connections.add(self)
 				print 'new connection was opened'
