@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tornado WebSockets</title>
+    <script>
+        var ws;
+
+        function onLoad() {
+            ws = new WebSocket("ws://raspberrypi:9090/websocket");
+
+            ws.onmessage = function(e) {
+               //alert(e.data);
+                document.getElementById('out').value += e.data;
+            };
+        }
+
+        function sendMsg() {
+            ws.send(document.getElementById('msg').value);
+        }
+    </script>
+</head>
+<body onload="onLoad();">
+    Send:<input type="text" id="msg" maxlength="25" size="30" />
+     <input type="button" onclick="sendMsg();" value="Send" />
+<br>
+Received:<br>
+<textarea id="out" rows="4" cols="50"></textarea>
+</body>
+</html>
