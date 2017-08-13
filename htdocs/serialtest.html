@@ -6,7 +6,7 @@
         var ws;
 
         function onLoad() {
-            ws = new WebSocket("ws://raspberrypi:9090/websocket");
+            ws = new WebSocket("ws://rexmini:9090/websocket");
 
             ws.onmessage = function(e) {
                //alert(e.data);
