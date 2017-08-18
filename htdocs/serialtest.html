@@ -10,7 +10,7 @@
 
             ws.onmessage = function(e) {
                //alert(e.data);
-                document.getElementById('out').value += e.data;
+                document.getElementById('out').value = e.data;
                 if(document.getElementById('out').scrollHeight>10) {
                     document.getElementById('out').value = '';
                 }
