@@ -29,7 +29,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
 		def on_message(self, message):
 				print 'from WebSocket: ', message
-				ser.write(message);     # received from WebSocket writen to arduino
+				ser.write(message.encode('utf-8'));     # received from WebSocket writen to arduino
 
 		def on_close(self):
 				self.connections.remove(self)
