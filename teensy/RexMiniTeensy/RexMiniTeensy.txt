@@ -1,0 +1,393 @@
+/**
+	Purpose: basic closed loop motor controller
+
+	@author Shintaro Fujita
+	@version 0.3 2017-4-20
+*/
+
+// #include <string.h>
+#include <common.h>
+
+struct pidSettings{
+	float p;
+	float i;
+	float d;
+	float dt;
+	float esum;
+};
+
+float e_sum = 0.0;
+float e_last = 0.0;
+unsigned long last_t = 0L;
+
+struct PidData {
+	float setpoint;
+	float measured;
+	float Kp;
+	float Ki;
+	float Kd;
+	float DeltaTimeFactor;
+	float error;
+	float p;
+	float i;
+	float d;
+	float correction;
+	float esum;
+};
+
+struct PidData pid1;
+
+
+
+// dc motor driver pin config
+#define PIN_DOUT_MOTOR_PWM 9 // D2
+#define PIN_DOUT_MOTOR_IN1 8 // direction
+#define PIN_DOUT_MOTOR_IN2 7 // direction
+#define PIN_DOUT_MOTOR_D1 6
+#define PIN_DIN_MOTOR_SF 5 // status flag
+#define PIN_AIN_MOTOR_FB 0 // current feedback about 525mv per amp
+
+// hall sensor a/b rotary encoder pin config
+#define PIN_DIN_ENCODER_A 2
+#define PIN_DIN_ENCODER_B 3
+
+
+float currentPerAnalogInput = 0.0;
+float targetPos = 0.0;
+
+char adr = 0xFF;
+
+int showPID = 0;
+
+float v1 = 0.0;
+float v2 = 0.0;
+float v3 = 0.0;
+float v4 = 0.0;
+
+
+
+struct pidSettings pidSettingA;
+
+void setup() {
+	// dc motor driver pin init
+	pinMode(PIN_DOUT_MOTOR_PWM, OUTPUT);
+	pinMode(PIN_DOUT_MOTOR_IN1, OUTPUT);
+	pinMode(PIN_DOUT_MOTOR_IN2, OUTPUT);
+	pinMode(PIN_DOUT_MOTOR_D1, OUTPUT);
+	digitalWrite(PIN_DOUT_MOTOR_D1, LOW); // set to default value
+
+	// test direction
+	digitalWrite(PIN_DOUT_MOTOR_IN1, HIGH);
+	digitalWrite(PIN_DOUT_MOTOR_IN2, LOW);
+
+	// rotary encoder pin init
+	pinMode(PIN_DIN_ENCODER_A, INPUT);
+	pinMode(PIN_DIN_ENCODER_B, INPUT);
+
+	// attach interrupt for rotary encoder digital pin to encoder function
+	attachInterrupt(digitalPinToInterrupt(2), read_encoder, CHANGE);
+	attachInterrupt(digitalPinToInterrupt(3), read_encoder, CHANGE);
+	
+	currentPerAnalogInput = (5.0/0.525)/1024.0; // current static factor
+
+	// init dc motor driver output compare match timer 1A
+	noInterrupts();
+	TCCR1A = 0;
+	TCCR1B = 0;
+	TCNT1=0;
+	TIMSK1 = 0;
+
+	OCR1A = 0x0003; // minimum pulse with value
+	ICR1 = 0x0190; // set top value for 20kHz PWM
+	
+	TCCR1A |= _BV(COM1A1);
+	TCCR1B |= _BV(WGM13)|_BV(CS10); // phase frequence correct PWM mode, 1x prescaler
+	
+	TIMSK1 |= _BV(TOIE1); // enable overflow interrupt
+	interrupts();
+
+	// init uart
+	Serial.begin(115200);
+
+	targetPos = 0.0; // test setpoint value
+
+	adr = EEPROM.read(0);
+	EEPROM.get(1,pidSettingA);
+	Serial.println("");
+	Serial.println("ready");
+
+	/*
+	pidSettingA.dt = 0.05;
+	pidSettingA.p = 1.2;
+	pidSettingA.i = 0.01;
+	pidSettingA.d = 0.01;
+	*/
+
+	pid1.DeltaTimeFactor = pidSettingA.dt; // 0.02;
+	pid1.Kp = pidSettingA.p; // 1.2;
+	pid1.Ki = pidSettingA.i; // 0.01;
+	pid1.Kd = pidSettingA.d; // 0.01;
+	pid1.esum = pidSettingA.esum;
+}
+
+// ------------------------------------------------------------------
+// begin: motor driver pwm interrupt vector for top event
+ISR(TIMER1_OVF_vect) {
+	// todo: add driver failure status digital pin read
+
+	// todo: check for interrupt trigger time with scope
+}
+// end: motor driver pwm interrupt vector for top event
+// ------------------------------------------------------------------
+
+
+
+// ------------------------------------------------------------------
+// begin: a/b encoder interrupt vector handling
+// under construction
+byte enc = 0;
+long counter = 0L;
+void read_encoder() { // rotary encoder decoder function
+	enc <<= 2; // 2x bit shift previews encoder state to left
+
+	// aquire digital pin status from rotary encoder and set to enc byte
+	if(digitalRead(PIN_DIN_ENCODER_A)==1) {
+		enc |= _BV(0);
+	}
+	if(digitalRead(PIN_DIN_ENCODER_B)==1) {
+		enc |= _BV(1);
+	}
+
+	enc = enc & 15; // mask out the left 4 bit's enc byte with 00001111. Keeping only the current and previews encoder states.
+
+	if(enc==2 || enc==11 || enc==13 || enc==4) { 
+		// if one of the following bit sequence match, then increment the counter.
+		// 00000010
+		// 00001011
+		// 00001101
+		// 00000100
+		counter++;
+	}
+
+	if(enc==1 || enc==7 || enc==14 || enc==8) {
+		// if one of the following bit sequence match, then decrease the counter.
+		// 00000001
+		// 00000111
+		// 00001110
+		// 00001000
+		counter--;
+	}
+}
+// end: a/b encoder interrupt vector handling
+// ------------------------------------------------------------------
+
+
+
+int feedback;
+int statusFlag;
+
+float sampleTime = 0.0;
+
+unsigned int pidLoopCounter = 0;
+unsigned int monitorCounter = 0;
+
+
+
+// ------------------------------------------------------------------
+// begin: PID function
+// under construction
+
+
+
+void pid(struct PidData *pidTmp) {
+
+	unsigned long t = millis();
+	unsigned long dt = t - last_t;
+	last_t = t;
+
+	float _Ta = (float)dt*pidTmp->DeltaTimeFactor;
+
+	pidTmp->error = pidTmp->setpoint - pidTmp->measured;			//Vergleich
+
+	/*
+	if(abs(pidTmp->error)<0.2) {
+		pidTmp->error = 0.0;
+	}
+	*/
+	// e_sum = (e_sum + pidTmp->error) * _Ta;				//Integration I-Anteil
+	e_sum = (e_sum + pidTmp->error);				//Integration I-Anteil
+
+	if(e_sum>pidTmp->esum) e_sum = pidTmp->esum;
+	if(e_sum<-pidTmp->esum) e_sum = -pidTmp->esum;
+
+	/*
+	if(abs(e_sum)<0.2) {
+		e_sum = 0.0;
+	}
+	*/
+
+	/*
+	esum = esum + e
+	y = Kp * e + Ki * Ta * esum + Kd * (e – ealt)/Ta
+	ealt = e
+	*/
+
+	pidTmp->p = pidTmp->Kp * pidTmp->error;
+	
+	pidTmp->i = pidTmp->Ki * e_sum;
+	
+	// pidTmp->d = pidTmp->Kd * ((pidTmp->error - e_last) / _Ta);
+	pidTmp->d = pidTmp->Kd * (pidTmp->error - e_last);
+	
+	pidTmp->correction = pidTmp->p + pidTmp->i + pidTmp->d;	//Reglergleichung
+	
+	// pidTmp->correction *= 0.01;
+	
+	e_last = pidTmp->error;
+}
+
+
+/*
+void printPIDValue(int v1,int v2,int  v3,int  v4) {
+	
+}
+*/
+// end: PID function
+// ------------------------------------------------------------------
+
+/*
+void toggleDebugMode() {
+	if(pidDebugMode==0) {
+		pidDebugMode = 1;
+	} else {
+		pidDebugMode = 0;
+	}
+	Serial.println("toggle debug");
+	Serial.println(pidDebugMode);
+}
+*/
+
+void serialParser() {
+	
+	uint8_t c;
+
+	
+	while(Serial.available()) {
+
+		c = Serial.read();
+		serialCMDParser(c);
+		
+	}
+}
+
+int serialCounter = 0;
+
+void setPidSettings_dt(float val) {
+	pidSettingA.dt = val;
+	pid1.DeltaTimeFactor = pidSettingA.dt; // 1.2;
+	updateEEPROMPID();
+}
+
+void setPidSettings_P(float val) {
+	pidSettingA.p = val;
+	pid1.Kp = pidSettingA.p; // 1.2;
+	updateEEPROMPID();
+}
+
+void setPidSettings_I(float val) {
+	pidSettingA.i = val;
+	pid1.Ki = pidSettingA.i; // 0.01;
+	updateEEPROMPID();
+}
+
+void setPidSettings_D(float val) {
+	pidSettingA.d = val;
+	pid1.Kd = pidSettingA.d; // 0.01;
+	updateEEPROMPID();
+}
+
+void setPidSettings_ESum(float val) {
+	pidSettingA.esum = val;
+	pid1.esum = pidSettingA.esum; // 0.01;
+	updateEEPROMPID();
+}
+
+void updateEEPROMPID(){
+	EEPROM.put(1, pidSettingA);
+}
+
+void loop() {
+	pidLoopCounter++; 
+	
+	/*
+	if(monitorCounter>500) { // uncomment for sampling limit
+		pidLoopCounter = 0;
+		OCR1A = 10;
+	}
+	*/
+	
+	if(pidLoopCounter>150) { // change pidLoopCounter to inc/dec pid sampling (smaller value more sampling and more cpu time usage)
+		monitorCounter++;
+		pidLoopCounter=0;
+		serialCounter++;
+
+		// ----------------------------------
+		// motor driver feedback stuff Todo: the data sampling should placed in interrupt vector 
+		feedback = analogRead(PIN_AIN_MOTOR_FB);		
+		statusFlag = digitalRead(PIN_DIN_MOTOR_SF);	
+		float feedbackAmp = (float)feedback*currentPerAnalogInput;
+		// ----------------------------------
+		
+		// ----------------------------------
+		// pid stuff
+		// float pidres = pid(targetPos, (float)counter, 0.1, 0.08, 0.05 , sampleTime);
+		// P = 0.6 I = 0.02 D = 0.5
+		// float pidres = pid(targetPos, (float)counter, 1.2, 0.01, 0.01 , 0.05); 
+		pid1.setpoint = targetPos;
+		pid1.measured = (float)counter;
+		
+		
+
+		pid(&pid1);
+
+
+		int Speed = (int)(pid1.correction); // multiply PWM max value with normalized PID value
+
+		// set dc motor rotation direction with IN1 and IN2 
+		if(Speed>0) {
+			digitalWrite(PIN_DOUT_MOTOR_IN1, HIGH);
+			digitalWrite(PIN_DOUT_MOTOR_IN2, LOW);
+		}
+
+		if(Speed<0) {
+			digitalWrite(PIN_DOUT_MOTOR_IN1, LOW);
+			digitalWrite(PIN_DOUT_MOTOR_IN2, HIGH);
+		}
+
+		// Speed = abs(Speed)+200; // rase Speed value to prevent PWM dead zone
+		Speed = abs(Speed);
+
+		if(Speed>400) { // prevent bullshit value ;)
+			Speed = 400;
+		}
+
+		OCR1A = abs(Speed);
+	
+	}
+
+	if(serialCounter>10) {
+		serialCounter = 0;
+		Serial.print(pid1.measured); // error
+		Serial.print(" ");
+		Serial.print(pid1.setpoint); // error
+		Serial.print(" ");
+		Serial.print(pid1.p);
+		Serial.print(" ");
+		Serial.print(pid1.i);
+		Serial.print(" ");
+		Serial.print(pid1.d);
+		Serial.print(" ");
+		Serial.println(pid1.correction);
+	}
+	serialParser();
+}

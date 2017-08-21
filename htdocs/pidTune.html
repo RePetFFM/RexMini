@@ -14,9 +14,28 @@
 
 		<!-- Custom styles for this template -->
 		<link href="./assets/css/starter-template.css" rel="stylesheet">
+
+		<script>
+				var ws;
+
+				function onLoad() {
+						ws = new WebSocket("ws://rexmini:9090/websocket");
+
+						ws.onmessage = function(e) {
+							 //alert(e.data);
+								document.getElementById('out').value += e.data;
+						};
+
+						setInterval(requestState, 100);
+				}
+
+				function requestState() {
+						ws.send('r1');
+				}
+		</script>
 	</head>
 
-	<body>
+	<body onload="onLoad();">
 
 		<nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
 			<a class="navbar-brand" href="index.html">RexMini</a>
@@ -26,10 +45,10 @@
 
 			<div class="collapse navbar-collapse" id="navbarsExampleDefault">
 				<ul class="navbar-nav mr-auto">
-					<li class="nav-item active">
+					<li class="nav-item ">
 						<a class="nav-link" href="index.html">Control</a>
 					</li>
-					<li class="nav-item">
+					<li class="nav-item active">
 						<a class="nav-link" href="pidTune.html">PID Setting</a>
 					</li>
 				</ul>
@@ -39,8 +58,8 @@
 		<div class="container">
 
 			<div class="starter-template">
-				<h1>Bootstrap starter template</h1>
-				<p class="lead">Use this document as a way to quickly start any new project.<br> All you get is this text and a mostly barebones HTML document.</p>
+				<h1>PID tuner</h1>
+				<textarea id="out" rows="4" cols="50"></textarea>
 			</div>
 
 		</div><!-- /.container -->
@@ -55,6 +74,9 @@
 		<script src="./assets/js/bootstrap.min.js"></script>
 		<!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
 		<script src="./assets/js/ie10-viewport-bug-workaround.js"></script>
+
+
+
 	</body>
 </html>
 
