@@ -24,6 +24,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
 		def open(self):
 				self.connections.add(self)
+				self.set_nodelay(True);
 				print 'new connection was opened'
 				pass
 
@@ -31,6 +32,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 				print 'from WebSocket: ', message
 				b = bytearray(message, 'utf-8')
 				ser.write(b+"\n");     # received from WebSocket writen to arduino
+				# ser.write("ff?\n")
 
 		def on_close(self):
 				self.connections.remove(self)

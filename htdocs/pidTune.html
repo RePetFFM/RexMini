@@ -23,14 +23,31 @@
 
 						ws.onmessage = function(e) {
 							 //alert(e.data);
-								document.getElementById('out').value += e.data;
+							document.getElementById('out').innerHTML += e.data.replace(/\n/g, "<br />");
 						};
 
-						setInterval(requestState, 100);
+						// requestState();
+						// setInterval(requestState, 2000);
 				}
 
 				function requestState() {
-						ws.send('r1');
+						ws.send('ff?');
+				}
+
+				function debugPid0() {
+					ws.send('ffed1');
+				}
+
+				function debugPid1() {
+					ws.send('ffed2');
+				}
+
+				function debugOff() {
+					ws.send('ffed0');
+				}
+
+				function clearDebugOuput() {
+					document.getElementById('out').innerHTML = '';
 				}
 		</script>
 	</head>
@@ -59,7 +76,12 @@
 
 			<div class="starter-template">
 				<h1>PID tuner</h1>
-				<textarea id="out" rows="4" cols="50"></textarea>
+				<p id="out" style="width:100%; height: 200px; border-style:solid; border-width:1px; overflow: scroll; text-align:left; font-size: 0.5em;"></p>
+				<button type="button" class="btn" onClick="debugPid0();">tune pid0</button>
+				<button type="button" class="btn" onClick="debugPid1();">tune pid1</button>
+				<button type="button" class="btn" onClick="debugOff();">debug mode off</button>
+				<button type="button" class="btn" onClick="clearDebugOuput();">clear debug screen</button>
+				
 			</div>
 
 		</div><!-- /.container -->

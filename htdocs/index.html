@@ -2,7 +2,8 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<!-- <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"> -->
+		<meta name="viewport" content="width=device-width, user-scalable=no">
 		<meta name="description" content="">
 		<meta name="author" content="">
 		<link rel="icon" href="favicon.ico">
@@ -14,6 +15,15 @@
 
 		<!-- Custom styles for this template -->
 		<link href="./assets/css/starter-template.css" rel="stylesheet">
+
+	<link href="touchControl.css" rel="stylesheet"> 
+	<style type="text/css">
+	body { margin: 0px; overflow: hidden; }
+	canvas { border: 1px solid black; }
+	</style>
+	<script type="text/javascript" src="jquery-2.2.2.min.js"></script>
+	<script type="text/javascript" src="magictouch.js"></script>
+	<script type="text/javascript" src="multiTouchController.js"></script>
 	</head>
 
 	<body>
@@ -38,10 +48,13 @@
 
 		<div class="container">
 
-			<div class="starter-template">
-				<h1>Bootstrap starter template</h1>
-				<p class="lead">Use this document as a way to quickly start any new project.<br> All you get is this text and a mostly barebones HTML document.</p>
-			</div>
+
+	
+	<div id="webcam" style="width:320; height:100%; margin-left:25%; left:-50%;"></div>
+	<img src="http://littletau:8080/?action=stream" style="width:320; height:100%; margin-left:25%; left:-50%;">
+	<canvas id="canvas" width="100%" height="100%" style="position: absolute; top:0px; left:0px; width: 100%; height: 100%; z-index:100; border-width:0px;"></canvas>
+
+	<button type="button" id="tiltControl" style="position:fixed; width:100px; height:50px; right:0px; bottom:0px; z-index:1000;">Gyro</button>
 
 		</div><!-- /.container -->
 

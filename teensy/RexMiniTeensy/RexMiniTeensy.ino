@@ -5,7 +5,7 @@
 	@version 0.3 2017-4-20
 */
 
-#include <SerialCommand.h>
+#include "common.h"
 #include <Encoder.h>
 
 Encoder encoderRight(33, 34);
@@ -13,7 +13,15 @@ Encoder encoderLeft(35, 36);
 
 long encoderRightCount, encoderLeftCount;
 
-SerialCommand SCmd;
+char debugMode = 0;
+
+struct pidSetting{
+	float p;
+	float i;
+	float d;
+	float dt;
+	float esum;
+};
 
 struct PidData {
 	float setpoint;
@@ -30,15 +38,19 @@ struct PidData {
 	float esum;
 };
 
+struct pidSetting pidSettings[2];
 
-struct PidData pidRight;
-struct PidData pidLeft;
+struct PidData pidDatas[2];
 
 unsigned long last_t = 0L;
 float e_sum = 0.0;
 float e_last = 0.0;
 
 float targetPos = 0.0;
+
+char adr = 0xFF;
+long counter;
+
 
 void setup() {
 	analogWrite(16, 0);
@@ -56,51 +68,52 @@ void setup() {
 
 	Serial1.begin(115200); 
 
+	// EEPROM.put(0,pidSettings);
+	EEPROM.get(0,pidSettings);
+
 	targetPos = 0.0;
 
-	pidRight.DeltaTimeFactor = 0.02; // 0.02;
-	pidRight.Kp = 1.2;
-	pidRight.Ki = 0.01;
-	pidRight.Kd = 0.01;
-	pidRight.esum = 0.1;
+	pidDatas[0].DeltaTimeFactor = 0.02; // 0.02;
+	pidDatas[0].Kp = 1.2;
+	pidDatas[0].Ki = 0.01;
+	pidDatas[0].Kd = 0.01;
+	pidDatas[0].esum = 0.1;
 
-	pidLeft.DeltaTimeFactor = 0.02; // 0.02;
-	pidLeft.Kp = 1.2;
-	pidLeft.Ki = 0.01;
-	pidLeft.Kd = 0.01;
-	pidLeft.esum = 0.1;
-
-	SCmd.addCommand("MLGOTO",set_motor_left_goto);
+	pidDatas[1].DeltaTimeFactor = 0.02; // 0.02;
+	pidDatas[1].Kp = 1.2;
+	pidDatas[1].Ki = 0.01;
+	pidDatas[1].Kd = 0.01;
+	pidDatas[1].esum = 0.1;
 
 	Serial1.println("ready");
 }
 
-void set_motor_left_goto() {
 
-  int aNumber;  
-  char *arg; 
-
-  arg = SCmd.next(); 
-  if (arg != NULL) 
-  {
-    aNumber=atoi(arg);    // Converts a char string to an integer
-    targetPos = (float)aNumber;
-    Serial1.println("MLDONE");
-  } 
-}
 
 int debugSerialCounter = 0;
 int pidExcutionCounter = 0;
 
 void loop() {
+	
 	encoderRightCount = encoderRight.read();
 	encoderLeftCount = -encoderLeft.read();
 
 	debugSerialCounter++;
 	pidExcutionCounter++;
 
-	if(debugSerialCounter>1000) {
+	if(debugSerialCounter>10000) {
 		debugSerialCounter = 0;
+
+		switch(debugMode) {
+			case '0':
+			break;
+			case '1':
+				debugPID(0);
+			break;
+			case '2':
+				debugPID(1);
+			break;
+		}
 
 		/*
 		Serial1.print("ER: ");
@@ -113,17 +126,17 @@ void loop() {
 	if(pidExcutionCounter>100) {
 		pidExcutionCounter = 0;
 
-		pidRight.setpoint = targetPos;
-		pidRight.measured = (float)encoderRightCount;
+		// pidDatas[0].setpoint = targetPos;
+		pidDatas[0].measured = (float)encoderRightCount;
 
-		pidLeft.setpoint = targetPos;
-		pidLeft.measured = (float)encoderLeftCount;
+		// pidDatas[1].setpoint = targetPos;
+		pidDatas[1].measured = (float)encoderLeftCount;
 
-		pid(&pidRight);
-		pid(&pidLeft);
+		pid(&pidDatas[0]);
+		pid(&pidDatas[1]);
 
-		int pwmRight = (int)(pidRight.correction);
-		int pwmLeft = (int)(pidLeft.correction);
+		int pwmRight = (int)(pidDatas[0].correction);
+		int pwmLeft = (int)(pidDatas[1].correction);
 
 		/*
 		Serial1.print("R: ");
@@ -150,6 +163,51 @@ void loop() {
 		setMotorPWMLeft(pwmLeft);
 
 	}
+
+	serialParser();
+}
+
+void serialParser() {
+	
+	uint8_t c;
+
+	
+	while(Serial1.available()) {
+
+		c = Serial1.read();
+		serialCMDParser(c);
+		
+	}
+}
+
+
+void setTarget(char pidid, float val) {
+	pidDatas[pidid].setpoint = val; // 1.2;
+}
+
+void setPidSettings_dt(char pidid, float val) {
+	pidDatas[pidid].DeltaTimeFactor = val; // 1.2;
+	updateEEPROMPID();
+}
+
+void setPidSettings_P(char pidid, float val) {
+	pidDatas[pidid].Kp = val; // 1.2;
+	updateEEPROMPID();
+}
+
+void setPidSettings_I(char pidid, float val) {
+	pidDatas[pidid].Ki = val; // 0.01;
+	updateEEPROMPID();
+}
+
+void setPidSettings_D(char pidid, float val) {
+	pidDatas[pidid].Kd = val; // 0.01;
+	updateEEPROMPID();
+}
+
+void setPidSettings_ESum(char pidid, float val) {
+	pidDatas[pidid].esum = val; // 0.01;
+	updateEEPROMPID();
 }
 
 
@@ -159,6 +217,22 @@ void setMotorPWMLeft(int val) {
 
 void setMotorPWMRight(int val) {
 	analogWrite(16, val);
+}
+
+void updateEEPROMPID(){
+	pidSettings[0].p = pidDatas[0].p;
+	pidSettings[0].i = pidDatas[0].i;
+	pidSettings[0].d = pidDatas[0].d;
+	pidSettings[0].esum = pidDatas[0].esum;
+	pidSettings[0].dt = pidDatas[0].DeltaTimeFactor;
+
+	pidSettings[1].p = pidDatas[1].p;
+	pidSettings[1].i = pidDatas[1].i;
+	pidSettings[1].d = pidDatas[1].d;
+	pidSettings[1].esum = pidDatas[1].esum;
+	pidSettings[1].dt = pidDatas[1].DeltaTimeFactor;
+
+	EEPROM.put(0, pidSettings);
 }
 
 void pid(struct PidData *pidTmp) {
@@ -184,4 +258,18 @@ void pid(struct PidData *pidTmp) {
 	pidTmp->correction = pidTmp->p + pidTmp->i + pidTmp->d;	//Reglergleichung
 	
 	e_last = pidTmp->error;
+}
+
+void debugPID(char pidid) {
+	Serial1.print(pidDatas[pidid].measured); // error
+	Serial1.print(" ");
+	Serial1.print(pidDatas[pidid].setpoint); // error
+	Serial1.print(" ");
+	Serial1.print(pidDatas[pidid].p);
+	Serial1.print(" ");
+	Serial1.print(pidDatas[pidid].i);
+	Serial1.print(" ");
+	Serial1.print(pidDatas[pidid].d);
+	Serial1.print(" ");
+	Serial1.println(pidDatas[pidid].correction);
 }
