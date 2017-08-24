@@ -15,15 +15,33 @@
 		<!-- Custom styles for this template -->
 		<link href="./assets/css/starter-template.css" rel="stylesheet">
 
+		<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
 		<script>
 				var ws;
 
+				var pidDebugData = [0,0,0,0,0,0];
+
+				var rowCounter = 0;
+
+				var doReadout = false;
+				
 				function onLoad() {
 						ws = new WebSocket("ws://rexmini:9090/websocket");
 
 						ws.onmessage = function(e) {
-							 //alert(e.data);
+							if(rowCounter>20) {
+								rowCounter = 0;
+								clearDebugOuput();
+							}
 							document.getElementById('out').innerHTML += e.data.replace(/\n/g, "<br />");
+							rowCounter++;
+
+							tmpStr = e.data.replace(/\n/g, "<br />");
+							if(tmpStr!='') {
+								pidDebugData = tmpStr.split(" ");	
+							}
+							
 						};
 
 						// requestState();
@@ -34,16 +52,16 @@
 						ws.send('ff?');
 				}
 
-				function debugPid0() {
-					ws.send('ffed1');
-				}
 
-				function debugPid1() {
-					ws.send('ffed2');
-				}
-
-				function debugOff() {
-					ws.send('ffed0');
+				function pidReadoutChanged() {
+					if(doReadout = document.getElementById('pidreadout').checked) {
+						ws.send('ffed0');
+						selectedPID = document.getElementById('pidSelection').value;
+						selectedPID++;
+						ws.send('ffed'+selectedPID);
+					} else {
+						ws.send('ffed0');
+					}
 				}
 
 				function clearDebugOuput() {
@@ -52,7 +70,7 @@
 		</script>
 	</head>
 
-	<body onload="onLoad();">
+	<body onload="onLoad()">
 
 		<nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
 			<a class="navbar-brand" href="index.html">RexMini</a>
@@ -73,17 +91,38 @@
 		</nav>
 
 		<div class="container">
-
-			<div class="starter-template">
-				<h1>PID tuner</h1>
-				<p id="out" style="width:100%; height: 200px; border-style:solid; border-width:1px; overflow: scroll; text-align:left; font-size: 0.5em;"></p>
-				<button type="button" class="btn" onClick="debugPid0();">tune pid0</button>
-				<button type="button" class="btn" onClick="debugPid1();">tune pid1</button>
-				<button type="button" class="btn" onClick="debugOff();">debug mode off</button>
-				<button type="button" class="btn" onClick="clearDebugOuput();">clear debug screen</button>
+			<div class="row">
+				<div class="col">
+					<select class="form-control" id="pidSelection">
+						<option value="0">PID 1</option>
+						<option value="1">PID 2</option>
+					</select>
+				</div>
+				<div class="col">
+					<label class="form-check-label">
+						<input id="pidreadout" class="form-check-input" type="checkbox" value="" onchange="pidReadoutChanged()">
+						active pid readout
+					</label>
+				</div>
+			</div>
 				
+			<div class="row">
+				<div class="col">
+					<div id="graph"></div>
+				</div>
 			</div>
 
+			<div class="row">
+				<div class="col">
+					<button class="btn btn-primary btn-sm" type="button" data-toggle="collapse" data-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
+						RAW data readout
+					</button>
+					<div class="collapse" id="collapseExample">
+						<p id="out" style="width:100%; height: 200px; border-style:solid; border-width:1px; overflow: scroll; text-align:left; font-size: 0.5em;"></p>
+					</div>
+				</div>
+			</div>
+				
 		</div><!-- /.container -->
 
 
@@ -98,7 +137,66 @@
 		<script src="./assets/js/ie10-viewport-bug-workaround.js"></script>
 
 
+		<script>
+function rand() {
+	return Math.random();
+}
 
+var time = new Date();
+
+var data = [{
+	x: [time], 
+	y: [0],
+	mode: 'lines',
+	line: {color: '#ff0000'}
+},{
+	x: [time], 
+	y: [0],
+	mode: 'lines',
+	line: {color: '#00ff00'}
+}]
+
+Plotly.plot('graph', data);  
+
+var cnt = 0;
+
+var interval = setInterval(function() {
+	
+	var time = new Date();
+
+	d1 = pidDebugData[0];
+	d2 = pidDebugData[1];
+
+	if(doReadout) {
+
+		var update = {
+		x:  [[time],[time]],
+		y: [[d1],[d2]]
+		}
+		
+		var olderTime = time.setSeconds(time.getSeconds() - 10);
+		var futureTime = time.setSeconds(time.getSeconds() + 10);
+		
+		var minuteView = {
+					xaxis: {
+						type: 'date',
+						range: [olderTime,futureTime]
+					}
+				};
+		
+		Plotly.relayout('graph', minuteView);
+		Plotly.extendTraces('graph', update, [0,1]);
+
+	}
+	
+	
+	
+	if(cnt === 100) clearInterval(interval);
+}, 10);
+
+
+
+		</script>
 	</body>
 </html>
 

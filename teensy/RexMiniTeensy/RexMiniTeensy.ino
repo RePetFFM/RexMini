@@ -46,7 +46,6 @@ unsigned long last_t = 0L;
 float e_sum = 0.0;
 float e_last = 0.0;
 
-float targetPos = 0.0;
 
 char adr = 0xFF;
 long counter;
@@ -71,7 +70,6 @@ void setup() {
 	// EEPROM.put(0,pidSettings);
 	EEPROM.get(0,pidSettings);
 
-	targetPos = 0.0;
 
 	pidDatas[0].DeltaTimeFactor = 0.02; // 0.02;
 	pidDatas[0].Kp = 1.2;
@@ -101,7 +99,7 @@ void loop() {
 	debugSerialCounter++;
 	pidExcutionCounter++;
 
-	if(debugSerialCounter>10000) {
+	if(debugSerialCounter>20000) {
 		debugSerialCounter = 0;
 
 		switch(debugMode) {

@@ -73,9 +73,7 @@ void serialParserSet(char adrReq, char * buf,uint8_t cnt) {
 				buf[0] = ' ';
 				// int tmpa = sscanf((const char*)&buf[1],"%d",&tmpLong);
 				tmpLong = atoi((const char*)&buf[1]);
-				if((float)tmpLong!=targetPos) {
-					setTarget(adrReq,(float)tmpLong);
-				}	
+				setTarget(adrReq,(float)tmpLong);
 			}
 		break;
 		case 'p': // pid propotional value
@@ -129,7 +127,7 @@ void serialParserExecute(char adrReq, char * buf,uint8_t cnt) {
 
 	switch (buf[0]) {
 		case 's':
-			targetPos = (float)counter;
+			// targetPos = (float)counter;
 			// OCR1A = 10;
 			/*
 			if(true) {
