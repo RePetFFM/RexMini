@@ -67,6 +67,65 @@
 				function clearDebugOuput() {
 					document.getElementById('out').innerHTML = '';
 				}
+
+				function setpoint() {
+					tmp_setpoint = document.getElementById('setpoint').value;
+					if(document.getElementById('pidSelection').value==0) {
+						ws.send('00sg'+tmp_setpoint);	
+					}
+
+					if(document.getElementById('pidSelection').value==1) {
+						ws.send('01sg'+tmp_setpoint);	
+					}
+				}
+
+
+				function pid_p() {
+					tmp = document.getElementById('pid_p').value;
+					tmp = Math.round(tmp*10);
+					if(document.getElementById('pidSelection').value==0) {
+						ws.send('00sp'+tmp);	
+					}
+
+					if(document.getElementById('pidSelection').value==1) {
+						ws.send('01sp'+tmp);	
+					}
+				}
+
+				function pid_i() {
+					tmp = document.getElementById('pid_i').value;
+					tmp = Math.round(tmp*10);
+					if(document.getElementById('pidSelection').value==0) {
+						ws.send('00si'+tmp);	
+					}
+
+					if(document.getElementById('pidSelection').value==1) {
+						ws.send('01si'+tmp);	
+					}
+				}
+
+				function pid_d() {
+					tmp = document.getElementById('pid_d').value;
+					tmp = Math.round(tmp*10);
+					if(document.getElementById('pidSelection').value==0) {
+						ws.send('00sd'+tmp);	
+					}
+
+					if(document.getElementById('pidSelection').value==1) {
+						ws.send('01sd'+tmp);	
+					}
+				}
+
+				function pid_esum() {
+					tmp = document.getElementById('pid_esum').value;
+					if(document.getElementById('pidSelection').value==0) {
+						ws.send('00se'+tmp);	
+					}
+
+					if(document.getElementById('pidSelection').value==1) {
+						ws.send('01se'+tmp);	
+					}
+				}
 		</script>
 	</head>
 
@@ -92,23 +151,63 @@
 
 		<div class="container">
 			<div class="row">
-				<div class="col">
-					<select class="form-control" id="pidSelection">
+				<div class="col-2">
+					<select class="form-control form-control-sm" id="pidSelection">
 						<option value="0">PID 1</option>
 						<option value="1">PID 2</option>
 					</select>
 				</div>
 				<div class="col">
 					<label class="form-check-label">
-						<input id="pidreadout" class="form-check-input" type="checkbox" value="" onchange="pidReadoutChanged()">
+						<input id="pidreadout" class="form-check-input form-control-sm" type="checkbox" value="" onchange="pidReadoutChanged()">
 						active pid readout
 					</label>
 				</div>
 			</div>
-				
+
+			<div class="row">
+				<div class="col-3">
+					<div class="input-group">
+					  <span class="input-group-addon form-control-sm" id="setpoint_lab">setpoint</span>
+					  <input id="setpoint" type="text" class="form-control form-control-sm" placeholder="setpoint" aria-label="setpoint" aria-describedby="setpoint_lab" onchange="setpoint()">
+					</div>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-2">
+					<div class="input-group">
+					  <span class="input-group-addon form-control-sm" id="pid_p_lab">p</span>
+					  <input id="pid_p" type="text" class="form-control form-control-sm" placeholder="pid_p" aria-label="pid_p" aria-describedby="pid_p_lab" onchange="pid_p()">
+					</div>
+				</div>
+
+				<div class="col-2">
+					<div class="input-group">
+					  <span class="input-group-addon form-control-sm" id="pid_i_lab">i</span>
+					  <input id="pid_i" type="text" class="form-control form-control-sm" placeholder="pid_i" aria-label="pid_i" aria-describedby="pid_i_lab" onchange="pid_i()">
+					</div>
+				</div>
+
+				<div class="col-2">
+					<div class="input-group">
+					  <span class="input-group-addon form-control-sm" id="pid_d_lab">i</span>
+					  <input id="pid_d" type="text" class="form-control form-control-sm" placeholder="pid_d" aria-label="pid_d" aria-describedby="pid_d_lab" onchange="pid_d()">
+					</div>
+				</div>
+
+				<div class="col-2">
+					<div class="input-group">
+					  <span class="input-group-addon form-control-sm" id="pid_esum_lab">i</span>
+					  <input id="pid_esum" type="text" class="form-control form-control-sm" placeholder="pid_esum" aria-label="pid_esum" aria-describedby="pid_esum_lab" onchange="pid_esum()">
+					</div>
+				</div>
+
+			</div>
+
 			<div class="row">
 				<div class="col">
-					<div id="graph"></div>
+					<div id="graph" style="height:200px;"></div>
 				</div>
 			</div>
 
@@ -145,18 +244,32 @@ function rand() {
 var time = new Date();
 
 var data = [{
+	name: 'mesured',
 	x: [time], 
 	y: [0],
 	mode: 'lines',
 	line: {color: '#ff0000'}
 },{
+	name: 'setpoint',
 	x: [time], 
 	y: [0],
 	mode: 'lines',
 	line: {color: '#00ff00'}
 }]
 
-Plotly.plot('graph', data);  
+
+var layout = {
+	autosize: true,
+	margin: {
+		l: 30,
+		r: 30,
+		b: 30,
+		t: 30,
+		pad: 4
+	}
+};
+
+Plotly.plot('graph', data,layout);  
 
 var cnt = 0;
 
@@ -189,13 +302,8 @@ var interval = setInterval(function() {
 
 	}
 	
-	
-	
 	if(cnt === 100) clearInterval(interval);
 }, 10);
-
-
-
 		</script>
 	</body>
 </html>

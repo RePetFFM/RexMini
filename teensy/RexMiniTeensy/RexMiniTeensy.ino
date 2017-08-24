@@ -36,6 +36,8 @@ struct PidData {
 	float d;
 	float correction;
 	float esum;
+	float e_sum;
+	float e_last;
 };
 
 struct pidSetting pidSettings[2];
@@ -43,8 +45,6 @@ struct pidSetting pidSettings[2];
 struct PidData pidDatas[2];
 
 unsigned long last_t = 0L;
-float e_sum = 0.0;
-float e_last = 0.0;
 
 
 char adr = 0xFF;
@@ -72,16 +72,18 @@ void setup() {
 
 
 	pidDatas[0].DeltaTimeFactor = 0.02; // 0.02;
-	pidDatas[0].Kp = 1.2;
-	pidDatas[0].Ki = 0.01;
-	pidDatas[0].Kd = 0.01;
-	pidDatas[0].esum = 0.1;
+	pidDatas[0].Kp = pidSettings[0].p;
+	pidDatas[0].Ki = pidSettings[0].i;
+	pidDatas[0].Kd = pidSettings[0].d;
+	pidDatas[0].esum = pidSettings[0].esum;
+	pidDatas[0].setpoint = 0.0;
 
 	pidDatas[1].DeltaTimeFactor = 0.02; // 0.02;
-	pidDatas[1].Kp = 1.2;
-	pidDatas[1].Ki = 0.01;
-	pidDatas[1].Kd = 0.01;
-	pidDatas[1].esum = 0.1;
+	pidDatas[1].Kp = pidSettings[1].p;
+	pidDatas[1].Ki = pidSettings[1].i;
+	pidDatas[1].Kd = pidSettings[1].d;
+	pidDatas[1].esum = pidSettings[1].esum;
+	pidDatas[1].setpoint = 0.0;
 
 	Serial1.println("ready");
 }
@@ -112,37 +114,25 @@ void loop() {
 				debugPID(1);
 			break;
 		}
-
-		/*
-		Serial1.print("ER: ");
-		Serial1.print(encoderRightCount);
-		Serial1.print(" EL: ");
-		Serial1.println(encoderLeftCount);
-		*/
 	}
 
 	if(pidExcutionCounter>100) {
 		pidExcutionCounter = 0;
 
-		// pidDatas[0].setpoint = targetPos;
 		pidDatas[0].measured = (float)encoderRightCount;
 
-		// pidDatas[1].setpoint = targetPos;
 		pidDatas[1].measured = (float)encoderLeftCount;
 
-		pid(&pidDatas[0]);
-		pid(&pidDatas[1]);
+		pid(0);
+
+		pid(1);
 
 		int pwmRight = (int)(pidDatas[0].correction);
 		int pwmLeft = (int)(pidDatas[1].correction);
 
-		/*
-		Serial1.print("R: ");
-		Serial1.print(pwmRight);
-		Serial1.print(" L: ");
-		Serial1.println(pwmLeft);
-		*/
-
+		pwmRight<0 ? digitalWrite(15, HIGH) : digitalWrite(15, LOW);
+		pwmLeft<0 ? digitalWrite(14, HIGH) : digitalWrite(14, LOW);
+		
 		pwmRight = abs(pwmRight);
 		pwmLeft = abs(pwmLeft);
 
@@ -153,9 +143,6 @@ void loop() {
 		if(pwmLeft>1000) { // prevent bullshit value ;)
 			pwmLeft = 1000;
 		}
-
-		pwmRight<0 ? digitalWrite(14, HIGH) : digitalWrite(14, LOW);
-		pwmLeft<0 ? digitalWrite(15, HIGH) : digitalWrite(15, LOW);
 			
 		setMotorPWMRight(pwmRight);
 		setMotorPWMLeft(pwmLeft);
@@ -210,52 +197,56 @@ void setPidSettings_ESum(char pidid, float val) {
 
 
 void setMotorPWMLeft(int val) {
-	analogWrite(17, val);
-}
-
-void setMotorPWMRight(int val) {
 	analogWrite(16, val);
 }
 
+void setMotorPWMRight(int val) {
+	analogWrite(17, val);
+}
+
 void updateEEPROMPID(){
-	pidSettings[0].p = pidDatas[0].p;
-	pidSettings[0].i = pidDatas[0].i;
-	pidSettings[0].d = pidDatas[0].d;
+	pidSettings[0].p = pidDatas[0].Kp;
+	pidSettings[0].i = pidDatas[0].Ki;
+	pidSettings[0].d = pidDatas[0].Kd;
 	pidSettings[0].esum = pidDatas[0].esum;
 	pidSettings[0].dt = pidDatas[0].DeltaTimeFactor;
 
-	pidSettings[1].p = pidDatas[1].p;
-	pidSettings[1].i = pidDatas[1].i;
-	pidSettings[1].d = pidDatas[1].d;
+	pidSettings[1].p = pidDatas[1].Kp;
+	pidSettings[1].i = pidDatas[1].Ki;
+	pidSettings[1].d = pidDatas[1].Kd;
 	pidSettings[1].esum = pidDatas[1].esum;
 	pidSettings[1].dt = pidDatas[1].DeltaTimeFactor;
 
 	EEPROM.put(0, pidSettings);
 }
 
-void pid(struct PidData *pidTmp) {
+void pid(char id) {
 
+	/*
 	unsigned long t = millis();
 	unsigned long dt = t - last_t;
 	last_t = t;
+	*/
 
-	// float _Ta = (float)dt*pidTmp->DeltaTimeFactor;
+	// float _Ta = (float)dt*pidDatas[id].DeltaTimeFactor;
 
-	pidTmp->error = pidTmp->setpoint - pidTmp->measured;			//Vergleich
+	// id = 0;
 
-	e_sum = (e_sum + pidTmp->error);				//Integration I-Anteil
+	pidDatas[id].error = pidDatas[id].setpoint - pidDatas[id].measured;			//Vergleich
 
-	if(e_sum>pidTmp->esum) e_sum = pidTmp->esum;
-	if(e_sum<-pidTmp->esum) e_sum = -pidTmp->esum;
+	pidDatas[id].e_sum = (pidDatas[id].e_sum + pidDatas[id].error);				//Integration I-Anteil
 
-	pidTmp->p = pidTmp->Kp * pidTmp->error;
+	if(pidDatas[id].e_sum>pidDatas[id].esum) pidDatas[id].e_sum = pidDatas[id].esum;
+	if(pidDatas[id].e_sum<-pidDatas[id].esum) pidDatas[id].e_sum = -pidDatas[id].esum;
+
+	pidDatas[id].p = pidDatas[id].Kp * pidDatas[id].error;
 	
-	pidTmp->i = pidTmp->Ki * e_sum;
-	pidTmp->d = pidTmp->Kd * (pidTmp->error - e_last);
+	pidDatas[id].i = pidDatas[id].Ki * pidDatas[id].e_sum;
+	pidDatas[id].d = pidDatas[id].Kd * (pidDatas[id].error - pidDatas[id].e_last);
 	
-	pidTmp->correction = pidTmp->p + pidTmp->i + pidTmp->d;	//Reglergleichung
+	pidDatas[id].correction = pidDatas[id].p + pidDatas[id].i + pidDatas[id].d;	//Reglergleichung
 	
-	e_last = pidTmp->error;
+	pidDatas[id].e_last = pidDatas[id].error;
 }
 
 void debugPID(char pidid) {
