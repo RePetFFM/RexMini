@@ -14,6 +14,7 @@ var controlBox_phi = 0;
 var gyro = '';
 
 var serverFeedback = '';
+var serverData = JSON.parse('{"VBat":8000}');
 
 // ajax variables
 var moveUpdate = false;
@@ -27,10 +28,18 @@ var counterSent = 0;
 var counterSuccess = 0;
 
 var mouseControlOn = false;
+var shiftPressed = false;
 
 var mouse_x = 0;
 var mouse_y = 0;
 
+var look_v = 610;
+var look_v_old = 600;
+
+var Licht = 0;
+
+var motorRightRev = 0;
+var motorLeftRev = 0;
 
 function update() {
 	if (updateStarted) return;
@@ -38,6 +47,10 @@ function update() {
 
 	var nw = window.innerWidth;
 	var nh = window.innerHeight;
+
+	var canvasOffset = $("#touchCanvas").offset();
+	var canvasOffsetX = canvasOffset.left;
+	var canvasOffsetY = canvasOffset.top;
 
 	if ((w != nw) || (h != nh)) {
 		w = nw;
@@ -71,15 +84,18 @@ function update() {
 	gyro = alpha+' - '+beta+' - '+gammaa;
 	*/
 
+	// serverSentStatus = 'sent: '+counterSent+' success: '+counterSuccess; 
 
+	// ctx.fillText("server sent status: "+serverSentStatus,30,150);
 
-	serverSentStatus = 'sent: '+counterSent+' success: '+counterSuccess; 
+	// ctx.fillText("server feedback: "+serverFeedback+" : "+serverData.VBat,30,180);
 
-	ctx.fillText("server sent status: "+serverSentStatus,30,150);
+    // 6.4 = 0%, 8.4 = 100%
+    var batProzent = Math.round(((serverData.VBat - 6400) * 100) / 2000);
 
-	ctx.fillText("server feedback: "+serverFeedback,30,180);
-
-	noMoveUpdate = true;
+    ctx.fillText("battery state: "+batProzent+"%",30,210);
+    
+    noMoveUpdate = true;
 
 	if(mouseControlOn) {
 		var px = mouse_x;
@@ -120,11 +136,18 @@ function update() {
 		
 		xpos = Math.round(300*(xpos/(w/2)));
 		ypos = Math.round(300*(ypos/(h/2)));
-
-		deltaX = moveLastchange_x - xpos;
-		deltaY = moveLastchange_y - ypos;
-		deltaR = moveLastchange_r - Math.round(controlBox_phi);
-
+        
+        if(shiftPressed == false) {
+		  deltaX = moveLastchange_x - xpos;
+		  deltaY = moveLastchange_y - ypos;
+		  deltaR = moveLastchange_r - Math.round(controlBox_phi);
+        } else {
+		  deltaX = moveLastchange_x - 0;
+		  deltaY = moveLastchange_y - ypos;
+		  deltaR = moveLastchange_r - xpos;  
+          controlBox_phi = xpos;
+          xpos = 0;          
+        }
 
 		ctx.fillText("x: "+xpos,30,60);
 		ctx.fillText("y: "+ypos,30,90);
@@ -140,13 +163,13 @@ function update() {
 		noMoveUpdate = false;
 	}
 
-
 	if(len>0) {
+		// multitouch input
 		for (i=0; i<len; i++) {
 			if(i>1) break; // exit if too many fingers
 			var touch = touches[i];
-			var px = touch.pageX;
-			var py = touch.pageY;
+			var px = touch.pageX-canvasOffsetX;
+			var py = touch.pageY-canvasOffsetY;
 
 			ctx.beginPath();
 			ctx.arc(px, py, 70, 0, 2*Math.PI, true);
@@ -160,8 +183,8 @@ function update() {
 
 			if(len==1) {
 				// if only one touch point
-				x1 = touches[0].pageX;
-				y1 = touches[0].pageY;	
+				x1 = touches[0].pageX-canvasOffsetX;
+				y1 = touches[0].pageY-canvasOffsetY;	
 				
 				controlBox_x = x1;
 				controlBox_y = y1;
@@ -181,17 +204,17 @@ function update() {
 			if(i==1) {
 				// if two touch point
 				ctx.beginPath();
-				ctx.moveTo(touches[0].pageX,touches[0].pageY);
-				ctx.lineTo(touches[1].pageX,touches[1].pageY);
+				ctx.moveTo(touches[0].pageX-canvasOffsetX,touches[0].pageY-canvasOffsetY);
+				ctx.lineTo(touches[1].pageX-canvasOffsetX,touches[1].pageY-canvasOffsetY);
 				ctx.lineWidth = 3.0;
 				ctx.strokeStyle = "rgba(0, 50, 100, 0.3)";
 				ctx.stroke();
 
-				x1 = touches[0].pageX;
-				y1 = touches[0].pageY;
+				x1 = touches[0].pageX-canvasOffsetX;
+				y1 = touches[0].pageY-canvasOffsetY;
 
-				x2 = touches[1].pageX;
-				y2 = touches[1].pageY;
+				x2 = touches[1].pageX-canvasOffsetX;
+				y2 = touches[1].pageY-canvasOffsetY;
 
 				if(x1>x2) {
 					tx = x1;
@@ -243,11 +266,13 @@ function update() {
 			ctx.fillText("phi: "+controlBox_phi_txt,30,120);
 
 
-			// moveChanged(xpos,ypos,controlBox_phi);
+			moveChanged(xpos,ypos,controlBox_phi);
 
+			/*
 			if(Math.abs(deltaX+deltaY+deltaR)>0) {
 				moveChanged(xpos,ypos,controlBox_phi);
 			};
+			*/
 		}
 		noMoveUpdate = false;
 	}
@@ -292,6 +317,7 @@ function update() {
 	ctx.fillStyle = "rgba(0, 0, 200, 1)";
 	ctx.fill();
 
+    
 	updateStarted = false;
 }
 
@@ -306,25 +332,17 @@ function moveChanged(x,y,r) {
 }
 
 function sendMoveChange() {
-	counterSent++;
 
-	if(!moveSent) {
-		moveSent = true;
-		moveUpdate = false;
-		$.ajax({
-		// cmd = move
-		// variables: x,y,r	
-			type: "POST",
-			url: "cgi",
-			data: {cmd: 'move', x: moveLastchange_x, y: moveLastchange_y, r: moveLastchange_r},
-			success: function( data ) {
-				counterSuccess++;
-				serverFeedback = data;
-				moveSent = false;
-				if(moveUpdate) sendMoveChange();
-		  	}
-		});
-	}
+	motorRightRev += moveLastchange_y;
+	motorLeftRev += moveLastchange_y;
+
+	curve = (moveLastchange_x*moveLastchange_x*moveLastchange_x)/600;
+
+	motorRightRev += curve/150;
+	motorLeftRev += -curve/150;
+
+	setpointLeft(motorRightRev);
+	setpointRight(motorLeftRev);
 }
 
 
@@ -358,8 +376,12 @@ function controlBox(x, y, phi, width,height) {
 
 	xxp4 = xp4*Math.cos(phi)-yp4*Math.sin(phi);
 	yyp4 = xp4*Math.sin(phi)+yp4*Math.cos(phi);
-
-	ctx.fillStyle = "rgba(200, 0, 0, 0.5)";
+     
+    if(shiftPressed) {
+	  ctx.fillStyle = "rgba(200, 200, 0, 0.5)";
+    } else {
+      ctx.fillStyle = "rgba(200, 0, 0, 0.5)";  
+    }
 	ctx.beginPath();
 	ctx.moveTo(xxp1+x, yyp1+y);
 	ctx.lineTo(xxp2+x, yyp2+y);
@@ -382,60 +404,13 @@ function drawUIAxisCenterMarker(x, y) {
 }
 
 
-
-/* Copyright (C) 2007 Richard Atterer, richardÂ©atterer.net
-   This program is free software; you can redistribute it and/or modify it
-   under the terms of the GNU General Public License, version 2. See the file
-   COPYING for details. */
-
-var imageNr = 0; // Serial number of current image
-var finished = new Array(); // References to img objects which have finished downloading
-var paused = false;
-
-function createImageLayer() {
-  var img = new Image();
-  img.style.position = "absolute";
-  img.style.zIndex = 10;
-  img.style.width = 320;
-  img.style.height = 280;
-  img.onload = imageOnload;
-  img.onclick = imageOnclick;
-  img.src = "http://littletau:8080/?action=snapshot&n=" + (++imageNr);
-  var webcam = document.getElementById("webcam");
-  webcam.insertBefore(img, webcam.firstChild);
-}
-
-// Two layers are always present (except at the very beginning), to avoid flicker
-function imageOnload() {
-  this.style.zIndex = 0; // Image finished, bring to front!
-  while (1 < finished.length) {
-	var del = finished.shift(); // Delete old image(s) from document
-	del.parentNode.removeChild(del);
-  }
-  finished.push(this);
-  if (!paused) createImageLayer();
-}
-
-function imageOnclick() { // Clicking on the image will pause the stream
-  paused = !paused;
-  if (!paused) createImageLayer();
-}
-
-
-
 $(document).ready(function() {
 	// createImageLayer();
-	canvas = document.getElementById('canvas');
+	canvas = document.getElementById('touchCanvas');
 	ctx = canvas.getContext('2d');
 	timer = setInterval(update, 100);
 
-	document.getElementById('tiltControl').addEventListener('mousedown',function(event) {
-		gyro = 'on';
-	});
-	document.getElementById('tiltControl').addEventListener('mouseup',function(event) {
-		gyro = 'off';
-	});
-
+	
 	canvas.addEventListener('touchend', function(event) {
 		event.preventDefault();
 		touches = [];
@@ -448,12 +423,12 @@ $(document).ready(function() {
 	canvas.addEventListener('touchmove', function(event) {
 		event.preventDefault();
 		touches = event.touches;
-		mouseControlOn = false;
+        mouseControlOn = false;
 	});
 
 	canvas.addEventListener('touchstart', function(event) {
 		event.preventDefault();
-		mouseControlOn = false;
+        mouseControlOn = false;
 	});
 
 	canvas.addEventListener('touchcancel', function(event) {
@@ -461,19 +436,31 @@ $(document).ready(function() {
 		controlBox_y = window.innerHeight/2;
 		controlBox_phi = 0;
 	});
-
+    
 	canvas.addEventListener('mouseup',function(event){
 		mouseControlOn = false;
 	});
 
 	canvas.addEventListener('mousemove',function(event){
-		mouse_x = event.pageX;
+		mouse_x = event.pageX - 32;
 		mouse_y = event.pageY;
 	});
 
 	canvas.addEventListener('mousedown',function(event){
 		mouseControlOn = true;
-	});
+	});    
+    
+    document.body.addEventListener('keydown',function(event){
+        if(event.keyCode === 16 || event.charCode === 16){
+            shiftPressed = true;
+        }
+    });
+     
+    document.body.addEventListener('keyup',function(event){
+        if(event.keyCode === 16 || event.charCode === 16){
+            shiftPressed = false;
+        }
+    });
 		// event.preventDefault();
 		
 // console.log('start');

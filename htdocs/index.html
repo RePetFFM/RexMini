@@ -16,17 +16,19 @@
 		<!-- Custom styles for this template -->
 		<link href="./assets/css/starter-template.css" rel="stylesheet">
 
-	<link href="touchControl.css" rel="stylesheet"> 
+	<!-- <link href="touchControl.css" rel="stylesheet"> -->
 	<style type="text/css">
 	body { margin: 0px; overflow: hidden; }
-	canvas { border: 1px solid black; }
+	canvas {
+	 border: 1px solid black; }
 	</style>
-	<script type="text/javascript" src="jquery-2.2.2.min.js"></script>
-	<script type="text/javascript" src="magictouch.js"></script>
-	<script type="text/javascript" src="multiTouchController.js"></script>
-	</head>
+	<script type="text/javascript" src="./assets/js/jquery-3.2.1.slim.min.js.css"></script>
+	<script type="text/javascript" src="./assets/js/magictouch.js"></script>
+	<script type="text/javascript" src="./assets/js/multiTouchController.js"></script>
+	<script type="text/javascript" src="./assets/js/wsMotion.js"></script>
+		</head>
 
-	<body>
+	<body onload="onLoad()">
 
 		<nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
 			<a class="navbar-brand" href="index.html">RexMini</a>
@@ -46,23 +48,12 @@
 			</div>
 		</nav>
 
-		<div class="container">
-
-
-	
-	<div id="webcam" style="width:320; height:100%; margin-left:25%; left:-50%;"></div>
-	<img src="http://littletau:8080/?action=stream" style="width:320; height:100%; margin-left:25%; left:-50%;">
-	<canvas id="canvas" width="100%" height="100%" style="position: absolute; top:0px; left:0px; width: 100%; height: 100%; z-index:100; border-width:0px;"></canvas>
-
-	<button type="button" id="tiltControl" style="position:fixed; width:100px; height:50px; right:0px; bottom:0px; z-index:1000;">Gyro</button>
-
-		</div><!-- /.container -->
-
+		<canvas id="touchCanvas" style="postion: absolute; top: 0px; width: 100%; height: 100%; border-width:1px;"></canvas>
 
 		<!-- Bootstrap core JavaScript
 		================================================== -->
 		<!-- Placed at the end of the document so the pages load faster -->
-		<script src="./assets/js/jquery-3.2.1.slim.min.js.css"></script>
+		
 		<script>window.jQuery || document.write('<script src="./assets/js/jquery-3.2.1.slim.min.js.css"><\/script>')</script>
 		<script src="./assets/js/popper.min.js"></script>
 		<script src="./assets/js/bootstrap.min.js"></script>
