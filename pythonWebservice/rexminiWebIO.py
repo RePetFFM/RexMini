@@ -12,6 +12,7 @@ def readSerial():
 		while True:
 			try:
 				data = ser.readline();
+				# data = 0
 				# print 'from Arduino: ', data
 				# received from Arduino written to all WebSocket clients
 				[con.write_message(data) for con in WebSocketHandler.connections]

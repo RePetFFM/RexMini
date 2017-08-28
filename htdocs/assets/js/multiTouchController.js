@@ -338,11 +338,11 @@ function sendMoveChange() {
 
 	curve = (moveLastchange_x*moveLastchange_x*moveLastchange_x)/600;
 
-	motorRightRev += curve/150;
-	motorLeftRev += -curve/150;
+	motorRightRev += curve/100;
+	motorLeftRev += -curve/100;
 
-	setpointLeft(motorRightRev);
-	setpointRight(motorLeftRev);
+	setpointLeft(Math.round(motorRightRev));
+	setpointRight(Math.round(motorLeftRev));
 }
 
 
