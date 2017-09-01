@@ -23,9 +23,7 @@
 	 border: 1px solid black; }
 	</style>
 	<script type="text/javascript" src="./assets/js/jquery-3.2.1.slim.min.js.css"></script>
-	<script type="text/javascript" src="./assets/js/magictouch.js"></script>
-	<script type="text/javascript" src="./assets/js/multiTouchController.js"></script>
-	<script type="text/javascript" src="./assets/js/wsMotion.js"></script>
+	<script type="text/javascript" src="./assets/js/wsFollow.js"></script>
 		</head>
 
 	<body onload="onLoad()">
@@ -38,10 +36,10 @@
 
 			<div class="collapse navbar-collapse" id="navbarsExampleDefault">
 				<ul class="navbar-nav mr-auto">
-					<li class="nav-item active">
+					<li class="nav-item">
 						<a class="nav-link" href="index.html">Control</a>
 					</li>
-					<li class="nav-item">
+					<li class="nav-item active">
 						<a class="nav-link" href="lfollower.html">Linefollower</a>
 					</li>
 					<li class="nav-item">
@@ -51,7 +49,29 @@
 			</div>
 		</nav>
 
-		<canvas id="touchCanvas" style="postion: absolute; top: 0px; width: 100%; height: 100%; border-width:1px;"></canvas>
+		<div class="container">
+			<div class="row">
+				<div class="col-6">
+					<div class="input-group">
+					  <span class="input-group-addon form-control-sm" id="setforward_lab">setforward</span>
+					  <input id="setforward" type="number" class="form-control form-control-sm" placeholder="setforward" aria-label="setforward" aria-describedby="setforward_lab" oninput="setForwardSpeed()">
+					</div>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-6">
+					<div class="input-group">
+					  <span class="input-group-addon form-control-sm" id="setcurve_lab">setcurve</span>
+					  <input id="setcurve" type="number" class="form-control form-control-sm" placeholder="setcurve" aria-label="setcurve" aria-describedby="setcurve_lab"  oninput="setCurveFactor()">
+					</div>
+				</div>
+			</div>
+
+		</div>
+
+
+		
 
 		<!-- Bootstrap core JavaScript
 		================================================== -->

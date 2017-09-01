@@ -52,6 +52,8 @@ end: line ccd variables
 */
 
 
+uint8_t robotMode = 0;
+
 Encoder encoderRight(33, 34);
 Encoder encoderLeft(35, 36);
 
@@ -93,6 +95,9 @@ unsigned long last_t = 0L;
 
 char adr = 0xFF;
 long counter;
+
+float forwardSpeed = 0.0;
+float curveSpeed = 100.0;
 
 
 void setup() {
@@ -141,6 +146,9 @@ int debugSerialCounter = 0;
 int pidExcutionCounter = 0;
 
 void loop() {
+	uint32_t microsPid;
+	uint32_t microsDebugOutput;
+	uint32_t currentMicros = micros();
 	
 	encoderRightCount = encoderRight.read();
 	encoderLeftCount = -encoderLeft.read();
@@ -148,8 +156,8 @@ void loop() {
 	debugSerialCounter++;
 	pidExcutionCounter++;
 
-	if(debugSerialCounter>20000) {
-		debugSerialCounter = 0;
+	if(microsDebugOutput<currentMicros) {
+		microsDebugOutput = currentMicros + 10000;
 
 		switch(debugMode) {
 			case '0':
@@ -163,8 +171,8 @@ void loop() {
 		}
 	}
 
-	if(pidExcutionCounter>1000) {
-		pidExcutionCounter = 0;
+	if(microsPid<currentMicros) {
+		microsPid = currentMicros+100;
 
 		pidDatas[0].measured = (float)encoderRightCount;
 
@@ -184,21 +192,26 @@ void loop() {
 		pwmLeft = abs(pwmLeft);
 
 		if(pwmRight>1000) { // prevent bullshit value ;)
-	pwmRight = 1000;
-}
+			pwmRight = 1000;
+		}
 
 		if(pwmLeft>1000) { // prevent bullshit value ;)
-	pwmLeft = 1000;
+			pwmLeft = 1000;
+		}
+
+		setMotorPWMRight(pwmRight);
+		setMotorPWMLeft(pwmLeft);
+
+	}
+
+	serialParser();
+
+	TSL1401_loop();
 }
 
-setMotorPWMRight(pwmRight);
-setMotorPWMLeft(pwmLeft);
-
-}
-
-serialParser();
-
-TSL1401_loop();
+void motorHalt() {
+	setMotorPWMRight(0);
+	setMotorPWMLeft(0);	
 }
 
 void serialParser() {
@@ -214,6 +227,26 @@ void serialParser() {
 	}
 }
 
+void clearMotorRevolution() {
+	pidDatas[0].setpoint = 0;
+	pidDatas[0].measured = 0;
+	encoderRight.write(0);
+	encoderRightCount = 0;
+
+	pidDatas[1].setpoint = 0;
+	pidDatas[1].measured = 0;
+	encoderLeft.write(0);
+	encoderLeftCount = 0;
+}
+
+void setCurvefactor(float val) {
+	curveSpeed<5 ? curveSpeed = 5 : false;
+	curveSpeed = val; // 1.2;
+}
+
+void setForwardSpeed(float val) {
+	forwardSpeed = val; // 1.2;
+}
 
 void setTarget(char pidid, float val) {
 	pidDatas[pidid].setpoint = val; // 1.2;
@@ -299,6 +332,8 @@ void pid(char id) {
 }
 
 void debugPID(char pidid) {
+	Serial1.print("dp");
+	Serial1.print(" ");
 	Serial1.print(pidDatas[pidid].measured); // error
 	Serial1.print(" ");
 	Serial1.print(pidDatas[pidid].setpoint); // error
@@ -310,6 +345,26 @@ void debugPID(char pidid) {
 	Serial1.print(pidDatas[pidid].d);
 	Serial1.print(" ");
 	Serial1.println(pidDatas[pidid].correction);
+}
+
+float motorRightRev = 0.0;
+float motorLeftRev = 0.0;
+
+void stear(int stearing) {
+	float stearing_float = (float)stearing;
+	float curve;
+	motorRightRev += forwardSpeed;
+	motorLeftRev += forwardSpeed;
+
+	curve = (stearing_float*stearing_float*stearing_float)/600;
+
+	motorRightRev += curve/curveSpeed;
+	motorLeftRev += -curve/curveSpeed;
+
+	setTarget(1,motorRightRev);
+	setTarget(0,motorLeftRev);
+	// setpointLeft(Math.round(motorRightRev));
+	// setpointRight(Math.round(motorLeftRev));
 }
 
 
@@ -483,6 +538,7 @@ void TSL1401_ReadLine() {
 		// store contrast enhanced 8-bit value
 		TSL1401_buf8[i] = val8;
 
+		/*
 		delta8 = 0;
 		if(val8<TSL1401_buf8_last[i]) {
 			delta8 = val8-TSL1401_buf8_last[i];	
@@ -490,6 +546,7 @@ void TSL1401_ReadLine() {
 		
 
 		TSL1401_buf8_last[i] = val8;
+		*/
 
 		// val8 = TSL1401_buf8_delta[i];
 		val8 = delta8;
@@ -498,7 +555,7 @@ void TSL1401_ReadLine() {
 		Tx1_buf[i] = 0;
 
 		if(i==66) {
-			Tx1_buf[i] = 200;
+			Tx1_buf[i] = 20;
 		}
 
 		// avoid value 255 for Tx1_buf
@@ -523,16 +580,30 @@ void TSL1401_ReadLine() {
 		tmp8 = 66+iCent;
 		sumRight = sumRight + (uint16_t)TSL1401_buf8[tmp8];
 	}
+
 	sumLeft<1 ? sumLeft = 1 : sumLeft = sumLeft/center_scan_area;
 	sumRight<1 ? sumRight = 1 : sumRight = sumRight/center_scan_area;
 
-	sumLeft>255 ? sumLeft = 255 : true;
-	sumRight>255 ? sumRight = 255 : true;
 
-	
+	sumLeft>254 ? sumLeft = 254 : true;
+	sumRight>254 ? sumRight = 254 : true;
+
+	stear((sumLeft-sumRight)/2);
+
+	tmp8 = (uint8_t)(66+((sumLeft-sumRight)/10));
 
 	Tx1_buf[60] = (uint8_t)sumLeft;
 	Tx1_buf[71] = (uint8_t)sumRight;
+
+	Tx1_buf[3] = (uint8_t)forwardSpeed;
+
+	Tx1_buf[5] = (uint8_t)curveSpeed;
+
+	tmp8>130 ? tmp8 = 130 : false;
+
+	Tx1_buf[tmp8] = 250;
+
+
 	
 	// calculate next average from min and max value
 	TSL1401_avgmin = 0.99 * TSL1401_avgmin + 0.01 * (float)TSL1401_valmin; 

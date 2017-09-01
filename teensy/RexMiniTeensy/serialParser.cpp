@@ -116,6 +116,22 @@ void serialParserSet(char adrReq, char * buf,uint8_t cnt) {
 			}
 		break;
 
+		case 'f':
+			{
+				buf[0] = ' ';
+				tmpLong = atoi((const char*)&buf[1]);
+				setForwardSpeed((float)tmpLong);
+			}
+		break;
+
+		case 'c':
+			{
+				buf[0] = ' ';
+				tmpLong = atoi((const char*)&buf[1]);
+				setCurvefactor((float)tmpLong);
+			}
+		break;
+
 	}
 }
 
@@ -126,6 +142,16 @@ void serialParserExecute(char adrReq, char * buf,uint8_t cnt) {
 	cnt-=4;
 
 	switch (buf[0]) {
+		case 'c':
+			// clear integrated motor revolution to zero
+			clearMotorRevolution();
+		break;
+
+		case 'm':
+			// change mode
+			robotMode = buf[1];
+		break;
+
 		case 's':
 			// targetPos = (float)counter;
 			// OCR1A = 10;
