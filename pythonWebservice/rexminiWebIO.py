@@ -5,7 +5,7 @@ import tornado.ioloop
 import serial
 import thread
 
-ser = serial.Serial('/dev/ttyS0', 115200, timeout=1)
+ser = serial.Serial('/dev/ttyS0', 230400, timeout=1) # 115200
 print(ser.name)
 
 def readSerial():

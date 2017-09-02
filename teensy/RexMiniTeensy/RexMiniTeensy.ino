@@ -7,8 +7,6 @@
 
 
 
-
-
 #include "common.h"
 #include <Encoder.h>
 
@@ -46,13 +44,14 @@ IntervalTimer TSL1401_TimerStartExpose;
 IntervalTimer TSL1401_TimerStopExpose;
 ADC *adc = new ADC(); // adc object;
 
-uint8_t center_scan_area = 8;
+
 /*
 end: line ccd variables
 */
 
 
-uint8_t robotMode = 0;
+#define BAT_VOLTAGE	A8
+char robotMode = 0;
 
 Encoder encoderRight(33, 34);
 Encoder encoderLeft(35, 36);
@@ -60,6 +59,13 @@ Encoder encoderLeft(35, 36);
 long encoderRightCount, encoderLeftCount;
 
 char debugMode = 0;
+
+uint8_t center_scan_area = 10;
+uint8_t centerline_center;
+uint8_t centerline_width;
+uint8_t centerline_known_width = 2;
+uint8_t centerline_width_tolarance = 2;
+uint8_t centerline_detected = 0;
 
 struct pidSetting{
 	float p;
@@ -106,6 +112,8 @@ void setup() {
 	analogWriteResolution(11);
 	analogWriteFrequency(16, 29296.875);
 	analogWriteFrequency(17, 29296.875);
+
+	pinMode(BAT_VOLTAGE, INPUT);
 	
 	
 	setMotorPWMRight(0);
@@ -114,8 +122,8 @@ void setup() {
 	pinMode(15, OUTPUT);
 	pinMode(14, OUTPUT);
 
-	Serial.begin(115200);
-	Serial1.begin(115200); 
+	// Serial.begin(115200);
+	Serial1.begin(230400);  // 115200
 
 	// EEPROM.put(0,pidSettings);
 	EEPROM.get(0,pidSettings);
@@ -135,44 +143,63 @@ void setup() {
 	pidDatas[1].esum = pidSettings[1].esum;
 	pidDatas[1].setpoint = 0.0;
 
-	Serial1.println("ready");
+	Serial1.println("ok");
 
 	TSL1401_setup();
 }
 
 
 
-int debugSerialCounter = 0;
-int pidExcutionCounter = 0;
+
+uint32_t microsPid;
+uint32_t microsDebugOutput;
+bool motorControlEnabled = false;
 
 void loop() {
-	uint32_t microsPid;
-	uint32_t microsDebugOutput;
-	uint32_t currentMicros = micros();
-	
-	encoderRightCount = encoderRight.read();
-	encoderLeftCount = -encoderLeft.read();
 
-	debugSerialCounter++;
-	pidExcutionCounter++;
+	robotMode_loop();
 
-	if(microsDebugOutput<currentMicros) {
-		microsDebugOutput = currentMicros + 10000;
+	if(motorControlEnabled) {
+		motorPID_loop();	
+	}
+
+	if(robotMode==2) {
+		followLine();
+	}
+
+	serialParser();
+
+	TSL1401_loop();
+
+	debugSerialOut_loop();
+
+	serialOut_state_loop();
+}
+
+void debugSerialOut_loop() {
+	if(microsDebugOutput<micros()) {
+		microsDebugOutput = micros() + 10000;
 
 		switch(debugMode) {
 			case '0':
 			break;
 			case '1':
-			debugPID(0);
+			serialOut_PID(0);
 			break;
 			case '2':
-			debugPID(1);
+			serialOut_PID(1);
 			break;
 		}
 	}
+}
 
-	if(microsPid<currentMicros) {
-		microsPid = currentMicros+100;
+void motorPID_loop() {
+
+	encoderRightCount = encoderRight.read();
+	encoderLeftCount = -encoderLeft.read();
+
+	if(microsPid<micros()) {
+		microsPid = micros()+100;
 
 		pidDatas[0].measured = (float)encoderRightCount;
 
@@ -203,10 +230,49 @@ void loop() {
 		setMotorPWMLeft(pwmLeft);
 
 	}
+}
 
-	serialParser();
+uint8_t currentRobotMode = 0;
 
-	TSL1401_loop();
+void robotMode_loop() {
+	if(currentRobotMode!=robotMode) {
+		switch (robotMode) {
+			case 0:
+				// standby mode
+				clearMotorRevolution();
+				motorHalt();
+				motorControlEnabled = false;
+				
+			  break;
+			case 1:
+			  // do something
+				clearMotorRevolution();
+				motorHalt();
+				motorControlEnabled = false;
+				centerline_known_width = centerline_width;
+				robotMode = 0;
+			  break;
+
+			case 2:
+			  // do something
+				clearMotorRevolution();
+				motorControlEnabled = true;
+				
+			  break;
+			case 3:
+			  // do something
+				// clearMotorRevolution();
+				motorControlEnabled = true;
+			  break;
+			default:
+			  // do something
+				clearMotorRevolution();
+				motorHalt();
+		}
+		currentRobotMode = robotMode;
+	}
+	
+	
 }
 
 void motorHalt() {
@@ -331,7 +397,7 @@ void pid(char id) {
 	pidDatas[id].e_last = pidDatas[id].error;
 }
 
-void debugPID(char pidid) {
+void serialOut_PID(char pidid) {
 	Serial1.print("dp");
 	Serial1.print(" ");
 	Serial1.print(pidDatas[pidid].measured); // error
@@ -345,6 +411,22 @@ void debugPID(char pidid) {
 	Serial1.print(pidDatas[pidid].d);
 	Serial1.print(" ");
 	Serial1.println(pidDatas[pidid].correction);
+}
+
+uint32_t millisSerialOut_state;
+
+void serialOut_state_loop() {
+
+	if(millisSerialOut_state<millis()) {
+		millisSerialOut_state = 1000+millis();
+		Serial1.print("0s");
+		Serial1.print(robotMode,DEC);
+		Serial1.print(" ");
+		Serial1.print(analogRead(BAT_VOLTAGE));
+		Serial1.println();	
+	}
+
+	
 }
 
 float motorRightRev = 0.0;
@@ -367,6 +449,50 @@ void stear(int stearing) {
 	// setpointRight(Math.round(motorLeftRev));
 }
 
+
+
+void detectLine() {
+	uint8_t prevValue = 255;
+	uint8_t centerline_left_in = 130;
+	uint8_t centerline_right_in = 0;
+
+	for(uint8_t i=64-center_scan_area; i<64+center_scan_area; i++) {
+		Tx1_buf[i]<prevValue ? centerline_left_in = i : false;
+		prevValue = Tx1_buf[i];
+	}
+
+	prevValue = 255;
+
+	for(uint8_t i=64+center_scan_area; i>64-center_scan_area; i--) {
+		Tx1_buf[i]<prevValue ? centerline_right_in = i : false;
+		prevValue = Tx1_buf[i];
+	}
+	centerline_width = centerline_right_in - centerline_left_in;
+	centerline_center = centerline_left_in + (centerline_width/2);
+
+	uint8_t minTolarance;
+	centerline_known_width-centerline_width_tolarance<1 ? minTolarance = 1 : minTolarance = centerline_known_width-centerline_width_tolarance;
+
+	if(centerline_width>=minTolarance && centerline_known_width+centerline_width_tolarance>centerline_width) {
+		centerline_detected = 1;
+	} else {
+		centerline_detected = 0;
+	}
+
+
+	
+}
+
+uint32_t millisFollowLine;
+
+void followLine() {
+	if(centerline_detected==1 && millisFollowLine<millis()) {
+		millisFollowLine = millis() + 10;
+		forwardSpeed = 2;
+
+		stear(centerline_center-64);
+	}
+}
 
 /*
 begin: line ccd code
@@ -398,8 +524,13 @@ void TSL1401_setup() {
 }
 
 
+uint32_t serialOutInterval;
+
 void TSL1401_loop() {
 	uint32_t tsDur;
+	
+	int tmpInt;
+	char tmp[2];
 
 	// Exposing is done in interrupt, this flag indicates if exposing is done and
 	// picture can be read, reading takes about 1ms
@@ -408,13 +539,40 @@ void TSL1401_loop() {
 		TSL1401_ReadLine();
 		TSL1401_PrepareExpose(); 
 
-		// insert end mark value and transmit
-		Tx1_buf[129] = 255;
-		Serial.write(Tx1_buf, 130);
+		if(serialOutInterval<millis()) {
+			serialOutInterval = 100+millis();
+			Serial1.print("cl");
+			for(uint8_t i=0; i<130; i++) {
+				sprintf(tmp,"%02X", Tx1_buf[i]);
+				Serial1.print(tmp);	
+			}
+			Serial1.print(" ");
+			Serial1.print(center_scan_area);
 
+			detectLine();
+
+			Serial1.print(" ");
+			Serial1.print(centerline_center);
+
+			Serial1.print(" ");
+			Serial1.print(centerline_width);
+
+			Serial1.print(" ");
+			Serial1.print(centerline_detected);
+
+			Serial1.print(" ");
+			Serial1.print(centerline_known_width);
+
+			
+			
+			Serial1.println();	
+		}
+		
 		tsDur = micros() - tsDur;
 	}
 }
+
+
 
 
 
@@ -535,75 +693,17 @@ void TSL1401_ReadLine() {
 		if(valmapped < 0) valmapped = 0;
 		val8 = valmapped;
 
-		// store contrast enhanced 8-bit value
 		TSL1401_buf8[i] = val8;
 
-		/*
-		delta8 = 0;
-		if(val8<TSL1401_buf8_last[i]) {
-			delta8 = val8-TSL1401_buf8_last[i];	
-		}
-		
-
-		TSL1401_buf8_last[i] = val8;
-		*/
-
-		// val8 = TSL1401_buf8_delta[i];
-		val8 = delta8;
-
-		
-		Tx1_buf[i] = 0;
-
-		if(i==66) {
-			Tx1_buf[i] = 20;
-		}
-
 		// avoid value 255 for Tx1_buf
-		/*
-		if(val8 == 255) val8 = 254;
-		Tx1_buf[i] = val8;
-		*/
-
 		
+		if(val8 == 255) val8 = 254;
 
+		val8<100 ? Tx1_buf[i] = 0 : Tx1_buf[i] = 254;
+		
 		digitalWriteFast(TSL1401_CLK, LOW); 
 		delayMicroseconds(1);
 	}
-
-	uint16_t sumLeft = 0;
-	uint16_t sumRight = 0;
-	uint8_t tmp8;
-
-	for(int iCent=0; iCent<center_scan_area; iCent++) {
-		tmp8 = 66-iCent;
-		sumLeft = sumLeft + (uint16_t)TSL1401_buf8[tmp8];
-		tmp8 = 66+iCent;
-		sumRight = sumRight + (uint16_t)TSL1401_buf8[tmp8];
-	}
-
-	sumLeft<1 ? sumLeft = 1 : sumLeft = sumLeft/center_scan_area;
-	sumRight<1 ? sumRight = 1 : sumRight = sumRight/center_scan_area;
-
-
-	sumLeft>254 ? sumLeft = 254 : true;
-	sumRight>254 ? sumRight = 254 : true;
-
-	stear((sumLeft-sumRight)/2);
-
-	tmp8 = (uint8_t)(66+((sumLeft-sumRight)/10));
-
-	Tx1_buf[60] = (uint8_t)sumLeft;
-	Tx1_buf[71] = (uint8_t)sumRight;
-
-	Tx1_buf[3] = (uint8_t)forwardSpeed;
-
-	Tx1_buf[5] = (uint8_t)curveSpeed;
-
-	tmp8>130 ? tmp8 = 130 : false;
-
-	Tx1_buf[tmp8] = 250;
-
-
 	
 	// calculate next average from min and max value
 	TSL1401_avgmin = 0.99 * TSL1401_avgmin + 0.01 * (float)TSL1401_valmin; 

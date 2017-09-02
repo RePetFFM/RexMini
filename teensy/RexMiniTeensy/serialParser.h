@@ -3,5 +3,5 @@
 extern long counter;
 extern char adr;
 extern char debugMode;
-extern uint8_t robotMode;
+extern char robotMode;
 void serialCMDParser(char c);

@@ -141,6 +141,8 @@ void serialParserSet(char adrReq, char * buf,uint8_t cnt) {
 void serialParserExecute(char adrReq, char * buf,uint8_t cnt) {
 	cnt-=4;
 
+	int tmpInt;
+
 	switch (buf[0]) {
 		case 'c':
 			// clear integrated motor revolution to zero
@@ -164,8 +166,8 @@ void serialParserExecute(char adrReq, char * buf,uint8_t cnt) {
 
 		case 'd': // debug mode
 			debugMode = buf[1];
-			Serial1.print("debugmode:");
-			Serial1.println(buf[1]);
+			// Serial1.print("debugmode:");
+			// Serial1.println(buf[1]);
 			/*
 			0 = off
 			1 = pid 0 debug
@@ -187,7 +189,6 @@ void serialCMDParser(char c) {
 
 	if(bufcnt==2) {
 		adrReq = readSingleHex(buf[0])<<4 | readSingleHex(buf[1]);
-
 	}
 	
 	if((adrReq==0xFF || adrReq==0x00 || adrReq==0x01) && ((c == 0x0a) || (bufcnt >= 30)) || ((bufcnt==2 ) && (c=='?'))) { // (c == 0x0d) ||
